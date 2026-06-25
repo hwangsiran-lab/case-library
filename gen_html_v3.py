@@ -1,9 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+用法:
+  python3 gen_html_v3.py                          # 使用默认路径（同目录下 cases_all_v2.json → cases-library.html）
+  python3 gen_html_v3.py --input new.json          # 从指定 JSON 生成，输出到默认 cases-library.html
+  python3 gen_html_v3.py --input a.json --output b.html
+"""
 import json
+import argparse
+from pathlib import Path
 from collections import Counter
 
-with open('/sessions/clever-tender-cerf/mnt/设计学习/矛盾对立视角案例库/cases_all_v2.json', encoding='utf-8') as f:
+_here = Path(__file__).parent
+
+def _parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument('--input',  default=str(_here / 'cases_all_v2.json'), help='源 JSON 文件路径')
+    p.add_argument('--output', default=str(_here / 'cases-library.html'), help='输出 HTML 文件路径')
+    return p.parse_args()
+
+_args = _parse_args()
+
+with open(_args.input, encoding='utf-8') as f:
     cases = json.load(f)
 for c in cases:
     c.setdefault('image', '')
@@ -841,6 +859,6 @@ renderNav(); applyAll();
 </body>
 </html>'''
 
-with open('/sessions/clever-tender-cerf/mnt/设计学习/矛盾对立视角案例库/案例库.html','w',encoding='utf-8') as f:
+with open(_args.output, 'w', encoding='utf-8') as f:
     f.write(HTML)
-print(f"完成 {len(HTML)//1024} KB")
+print(f"完成 {len(HTML)//1024} KB → {_args.output}")

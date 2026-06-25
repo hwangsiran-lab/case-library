@@ -3,19 +3,26 @@
 export_cases.py — Generate a formatted Excel table from extracted art/design history cases.
 
 Usage:
-    python export_cases.py --data '[{...}, {...}]' --output cases.xlsx
-    python export_cases.py --input cases.json --output cases.xlsx
+    python export_cases.py --input cases_all_v2.json --output cases.xlsx
+    python export_cases.py --data '[{...}]' --output cases.xlsx
 
-Input JSON schema (array of case objects):
+Current JSON schema (cases_all_v2.json):
 [
   {
-    "作品事件名称": "...",
+    "类别": "国内/国外",
     "年代": "...",
-    "作者设计师": "...",
-    "框架节点": "...",
+    "排序年": 1234,
+    "作品/事件名称": "...",
+    "作者/设计师": "...",
+    "来源书目": "《书名》",
+    "简介": "...",
     "原文引用": "...",
-    "来源": "...",
-    "教学分析": "..."
+    "教学分析": "...",
+    "批注": "...",
+    "标签": ["1.2 二元与多元"],
+    "importance": 0,
+    "image": "",
+    "link": ""
   }
 ]
 """
@@ -41,38 +48,47 @@ except ImportError:
 
 
 COLUMNS = [
-    ("作品/事件名称", 28),
+    ("作品/事件名称", 30),
     ("年代",         12),
-    ("作者/设计师",   20),
-    ("框架节点",      25),
+    ("类别",          8),
+    ("作者/设计师",   22),
+    ("标签",          28),
+    ("来源书目",      20),
     ("原文引用",      45),
-    ("来源",          22),
     ("教学分析",      55),
+    ("批注",          30),
+    ("重要性",        10),
 ]
 
-# Map JSON keys (no slashes) to column headers (with slashes)
+# Map JSON keys to column headers
 KEY_MAP = {
-    "作品事件名称": "作品/事件名称",
     "作品/事件名称": "作品/事件名称",
     "年代": "年代",
-    "作者设计师": "作者/设计师",
+    "类别": "类别",
     "作者/设计师": "作者/设计师",
-    "框架节点": "框架节点",
+    "标签": "标签",          # array → joined string
+    "来源书目": "来源书目",
     "原文引用": "原文引用",
-    "来源": "来源",
     "教学分析": "教学分析",
+    "批注": "批注",
+    "importance": "重要性",
 }
 
 HEADER_FILL   = PatternFill("solid", fgColor="2C3E50")
 HEADER_FONT   = Font(name="Arial", bold=True, color="FFFFFF", size=11)
 ALT_FILL      = PatternFill("solid", fgColor="F2F4F6")
+AMBER_FILL    = PatternFill("solid", fgColor="FFF3CD")
 WRAP          = Alignment(wrap_text=True, vertical="top")
 CENTER_WRAP   = Alignment(wrap_text=True, vertical="top", horizontal="center")
 THIN          = Side(style="thin", color="CCCCCC")
 BORDER        = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
+import re as _re
+def _strip_bold(text: str) -> str:
+    return _re.sub(r'\*\*(.+?)\*\*', r'\1', text)
 
-def load_cases(data_str: str | None, input_file: str | None) -> list[dict]:
+
+def load_cases(data_str, input_file):
     if data_str:
         return json.loads(data_str)
     if input_file:
@@ -81,11 +97,22 @@ def load_cases(data_str: str | None, input_file: str | None) -> list[dict]:
 
 
 def normalize(case: dict) -> dict:
-    """Remap JSON keys to canonical column headers."""
+    """Remap JSON keys to canonical column headers; handle arrays and bold markers."""
     out = {}
     for k, v in case.items():
-        canonical = KEY_MAP.get(k, k)
-        out[canonical] = str(v) if v is not None else ""
+        col = KEY_MAP.get(k)
+        if col is None:
+            continue
+        if isinstance(v, list):
+            # 标签 array → "1.2 二元与多元 / 4.1 形式与功能"（空数组→空字符串）
+            out[col] = " / ".join(str(i) for i in v) if v else ""
+        elif v is None:
+            out[col] = ""
+        else:
+            text = str(v)
+            if col in ("教学分析", "原文引用"):
+                text = _strip_bold(text)
+            out[col] = text
     return out
 
 
@@ -119,7 +146,10 @@ def build_workbook(cases: list[dict]) -> Workbook:
             cell  = ws.cell(row=row_idx, column=col_idx, value=value)
             cell.alignment = WRAP
             cell.border    = BORDER
-            if fill:
+            # 批注列：非空时琥珀色底
+            if header == "批注" and value:
+                cell.fill = AMBER_FILL
+            elif fill:
                 cell.fill = fill
 
         # Auto row height hint (openpyxl can't truly auto-fit, set a generous min)
